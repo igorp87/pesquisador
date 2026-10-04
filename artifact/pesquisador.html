@@ -66,6 +66,10 @@ select { padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; b
 
 .status { display: flex; gap: 8px; flex-wrap: wrap; font-size: 0.85rem; }
 .pill { display: inline-flex; gap: 6px; align-items: center; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--line); background: var(--panel); }
+.sendbox { display: grid; gap: 10px; }
+.sendbox p { margin: 0; }
+.sendrow { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+code { font: 0.88em var(--mono); background: var(--accent-wash); padding: 1px 5px; border-radius: 4px; }
 select.mini { padding: 2px 6px; font-size: 0.85rem; border-radius: 6px; }
 .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--soft); flex: none; }
 .dot.ok { background: var(--ok); } .dot.warn { background: var(--warn); } .dot.bad { background: var(--bad); }
@@ -204,7 +208,7 @@ a.cite { font: 500 0.78em var(--mono); text-decoration: none; padding: 0 2px; }
   <div class="status">
     <label class="pill" for="engine">Análise:
       <select id="engine" class="mini">
-        <option value="remote">Sessão remota do Claude Code</option>
+        <option value="claudecode">Claude Code (créditos do modo remoto)</option>
         <option value="sample">Claude da conta (claude.ai)</option>
       </select>
     </label>
@@ -530,7 +534,7 @@ a.cite { font: 500 0.78em var(--mono); text-decoration: none; padding: 0 2px; }
 
   // ---------- starting a run ----------
   function startRun(run, title) {
-    state.ctl?.abort();
+    state.ctl?.abort(); state.unsub?.(); state.unsub = null;
     state.run = run; state.view = "main";
     $("how").hidden = true; $("run").hidden = false;
     $("report").innerHTML = ""; $("report").hidden = false; $("items").hidden = true;
@@ -606,56 +610,94 @@ ${dataBlock(run, textLen)}
   }
 
   // ---------- analysis engines ----------
-  // "remote": a Claude Code Remote session (billed to the viewer's Claude Code usage).
+  // "claudecode": the page saves the prompt to this artifact's db (runs/<id>) and, on the viewer's
+  //   click, sends a comment to the Claude Code session watching the artifact. That session writes
+  //   {status: "done", result} back to the same doc and the page renders it from onSnapshot.
   // "sample": the viewer's claude.ai Claude, through the sample capability.
-  const REMOTE = "Claude Code Remote";
-  const REMOTE_PREFIX = "Você está sendo usado como motor de análise de um app de pesquisa de negócios. Não use nenhuma ferramenta, não leia nem crie arquivos, não faça commits: responda direto, usando apenas os dados abaixo.\n\n";
-  const REMOTE_MAX_CHARS = 55000;
-  const sleep = (ms, signal) => new Promise((resolve, reject) => {
-    const t = setTimeout(resolve, ms);
-    signal?.addEventListener("abort", () => { clearTimeout(t); reject({ code: "cancelled" }); }, { once: true });
-  });
-  const ccr = (p) => (p && typeof p === "object" && p.ccr) || p || {};
-  const rc = async (tool, input) => ccr((await state.mcp.callTool(REMOTE, tool, input, { cache: false })).payload);
-
-  // Shrinks excerpts until the prompt fits what a new session accepts as its first message.
-  function fitPrompt(build, startLen) {
-    let len = startLen, p = build(len);
-    while (p.length > REMOTE_MAX_CHARS && len > 150) { len -= 100; p = build(len); }
-    return p;
+  const DOC_MAX = 240000;
+  const engine = () => $("engine").value;
+  const use = (n) => (window.claude && window.claude.use ? window.claude.use(n) : Promise.resolve(null));
+  function noEngine() {
+    hideThinking();
+    $("report").innerHTML = "<p>Nenhum motor de análise disponível nesta visualização. As fontes coletadas estão na lista ao lado.</p>";
   }
 
-  async function remoteRun(prompt, title, ctl, onTick) {
-    const envs = (await rc("list_environments", { limit: 20 })).environments || [];
-    const env = envs.find((e) => e.state === "active" && e.kind === "anthropic_cloud") || envs.find((e) => e.state === "active") || envs[0];
-    if (!env) throw { code: "no_env" };
-    const s = await rc("create_session", { environment_id: env.environment_id, title, tags: ["pesquisador"], prompt: REMOTE_PREFIX + prompt });
-    const sid = s.id;
-    if (!sid) throw { code: "remote_error", message: "a sessão não foi criada" };
-    const t0 = Date.now();
-    let after;
+  async function queueForClaudeCode(run, build, startLen) {
+    const db = await use("db");
+    if (!db) { hideThinking(); $("report").innerHTML = "<p>O banco do artefato não está disponível nesta visualização. Abra pelo claude.ai logado, ou troque a análise para \"Claude da conta\".</p>"; return; }
+    let len = startLen, prompt = build(len);
+    while (prompt.length > DOC_MAX && len > 150) { len -= 100; prompt = build(len); }
+    run.id = run.id || "r" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+    const title = run.kind === "discover" ? `Oportunidades${run.area ? " em " + run.area : " (todas as áreas)"}` : `Relatório: ${run.topic}`;
+    const ref = db.doc("runs/" + run.id);
     try {
-      while (Date.now() - t0 < 10 * 60 * 1000) {
-        await sleep(5000, ctl.signal);
-        onTick(Math.round((Date.now() - t0) / 1000));
-        let page;
-        do {
-          const input = { session_id: sid, kinds: ["result"], limit: 100 };
-          if (after) input.after_id = after;
-          page = await rc("list_events", input);
-          if (page.last_id) after = page.last_id;
-          for (const ev of page.data || []) {
-            const r = ev.result && (ev.result.internal_anthropic_catchall || ev.result);
-            if (!r) continue;
-            if (r.is_error || (r.subtype && r.subtype !== "success")) throw { code: "remote_error", message: String(r.result || r.subtype || "") };
-            return String(r.result || "");
-          }
-        } while (page.has_more);
-      }
-      throw { code: "remote_timeout" };
-    } finally {
-      rc("archive_session", { session_id: sid }).catch(() => {});
+      await ref.set({
+        kind: run.kind, title, status: "pending", createdAt: Date.now(), prompt,
+        output: run.kind === "discover"
+          ? "Grave em result.opps o array JSON pedido no prompt."
+          : "Grave em result.report o relatório em Markdown pedido no prompt.",
+      });
+    } catch (e) {
+      hideThinking(); $("report").innerHTML = `<p>Não consegui salvar a pesquisa no banco do artefato (${escapeHtml(e && e.code || "erro")}).</p>`; return;
     }
+    state.unsub?.();
+    state.unsub = ref.onSnapshot((snap) => {
+      const d = snap.exists ? snap.data() : null;
+      if (!d || state.run !== run) return;
+      if (d.status === "done" && d.result) { state.unsub?.(); state.unsub = null; applyResult(run, d.result); }
+      else if (d.status === "error") { state.unsub?.(); state.unsub = null; hideThinking(); $("report").innerHTML = `<p>O Claude Code não conseguiu analisar: ${escapeHtml(d.error || "erro")}</p>`; $("regen").hidden = false; }
+      else if (d.status === "working") showThinking("O Claude Code está analisando. O resultado aparece aqui sozinho…");
+    }, () => {});
+    hideThinking();
+    await renderSendPanel(run, title);
+  }
+
+  async function renderSendPanel(run, title) {
+    const comments = await use("comments");
+    const can = comments ? await comments.canSendToClaude().catch(() => "off") : "off";
+    const cmd = `analisar pesquisa ${run.id}`;
+    const why = { writers_only: "Só editores do artefato podem enviar ao Claude.", no_session: "Nenhuma sessão do Claude Code está acompanhando este artefato agora.", off: "Enviar ao Claude não está disponível nesta visualização." }[can];
+    $("report").innerHTML = `<div class="sendbox">
+      <p><strong>${run.refs.length} resultados coletados e salvos.</strong> Agora envie pro Claude Code fazer a análise com os seus créditos do modo remoto.</p>
+      <div class="sendrow">
+        <button class="primary" id="sendCC" type="button" ${can === "available" ? "" : "disabled"}>Enviar ao Claude Code</button>
+        ${why ? `<span class="hint">${escapeHtml(why)}</span>` : ""}
+      </div>
+      <p class="hint">Se o botão não funcionar, cole isto numa sessão do Claude Code que tenha acesso a este artefato: <code id="ccCmd">${escapeHtml(cmd)}</code> <button class="ghost" id="copyCmd" type="button">Copiar</button></p>
+    </div>`;
+    $("copyCmd").onclick = async () => {
+      try { await navigator.clipboard.writeText(cmd); $("copyCmd").textContent = "Copiado"; }
+      catch { const r = document.createRange(); r.selectNodeContents($("ccCmd")); getSelection().removeAllRanges(); getSelection().addRange(r); }
+    };
+    $("sendCC").onclick = async (ev) => {
+      const btn = ev.currentTarget; btn.disabled = true;
+      try {
+        const anchor = await comments.anchorFor(btn);
+        await comments.sendToClaude({ anchor, text: `${cmd} — ${title}. O prompt completo está no banco do artefato em runs/${run.id} (campo prompt). Grave o resultado no mesmo documento com status "done".` });
+        showThinking("Enviado. O Claude Code está analisando; o resultado aparece aqui sozinho (1 a 3 minutos)…");
+        btn.textContent = "Enviado";
+      } catch (e) {
+        btn.disabled = false;
+        const msg = { claude_unavailable: "Não deu pra enviar ao Claude agora. Use o comando abaixo.", consent_required: "Permita os comentários quando o claude.ai perguntar e clique de novo.", rate_limited: "Muitos envios seguidos. Espere um pouco." }[e && e.code] || "Falha ao enviar. Use o comando abaixo.";
+        btn.insertAdjacentHTML("afterend", `<span class="hint" style="color:var(--bad)">${escapeHtml(msg)}</span>`);
+      }
+    };
+  }
+
+  function applyResult(run, result) {
+    hideThinking();
+    if (run.kind === "discover") {
+      let arr = result.opps;
+      if (typeof arr === "string") arr = parseJsonLoose(arr);
+      run.opps = normalizeOpps(arr, run.refs.length);
+      if (!run.opps.length) { $("report").innerHTML = "<p>A análise voltou sem oportunidades com evidência suficiente.</p>"; return; }
+    } else {
+      run.report = String(result.report || "");
+    }
+    saveHistory(run);
+    $("regen").hidden = false; $("copy").hidden = false;
+    renderRail();
+    if (state.view === "main") renderMain(run);
   }
 
   function parseJsonLoose(text) {
@@ -668,55 +710,29 @@ ${dataBlock(run, textLen)}
     return null;
   }
 
-  function remoteCopy(e) {
-    if (e && e.code === "cancelled") return "Interrompido.";
-    if (e && e.code === "no_env") return "Nenhum ambiente do Claude Code encontrado na sua conta. Abra claude.ai/code uma vez para criar o ambiente padrão.";
-    if (e && e.code === "remote_timeout") return "A sessão remota passou de 10 minutos sem responder. Clique em Gerar de novo.";
-    if (e && e.code === "remote_error") return "A sessão remota terminou com erro" + (e.message ? ": " + clip(e.message, 300) : ".");
-    if (e && e.code === "server_not_connected") return "O conector Claude Code Remote não está disponível para a sua conta. Troque a análise para \"Claude da conta\".";
-    if (e && e.code === "not_in_manifest") return "Você não liberou o Claude Code Remote para esta página. Recarregue e permita quando for perguntado.";
-    return (MCP_COPY[e && e.code] || "Falha ao falar com a sessão remota.") + (e && e.message ? " " + clip(e.message, 200) : "");
-  }
-
-  const engine = () => $("engine").value;
-  function noEngine() {
-    hideThinking();
-    $("report").innerHTML = "<p>Nenhum motor de análise disponível nesta visualização. As fontes coletadas estão na lista ao lado.</p>";
-  }
-
   // ---------- discovery analysis ----------
   async function discover(run) {
-    const useRemote = engine() === "remote";
-    if (useRemote ? !state.mcp : !state.sample) return noEngine();
+    if (engine() === "claudecode") return queueForClaudeCode(run, (n) => discoverPrompt(run, n), 700);
+    if (!state.sample) return noEngine();
     const ctl = new AbortController(); state.ctl = ctl;
     $("stop").hidden = false;
     try {
-      let arr;
-      if (useRemote) {
-        showThinking(`Criando sessão remota do Claude Code para analisar ${run.refs.length} resultados…`);
-        const text = await remoteRun(fitPrompt((n) => discoverPrompt(run, n), 650), `Pesquisador: oportunidades${run.area ? " em " + run.area : ""}`, ctl,
-          (s) => state.run === run && showThinking(`Sessão remota montando o ranking… ${s}s (leva de 1 a 3 minutos)`));
-        arr = parseJsonLoose(text);
-        if (!Array.isArray(arr)) throw { code: "invalid_json" };
-      } else {
-        showThinking(`O Claude está lendo ${run.refs.length} resultados e montando o ranking. Leva de 1 a 2 minutos…`);
-        arr = await state.sample.json(discoverPrompt(run, 650), {
-          signal: ctl.signal, cache: false, modelTier: "complex",
-          onText: ({ text }) => {
-            if (state.run !== run) return;
-            const found = (text.match(/"titulo"\s*:/g) || []).length;
-            if (found) showThinking(`${found} oportunidade${found > 1 ? "s" : ""} encontrada${found > 1 ? "s" : ""} até agora…`);
-          },
-        });
-      }
+      showThinking(`O Claude está lendo ${run.refs.length} resultados e montando o ranking. Leva de 1 a 2 minutos…`);
+      const arr = await state.sample.json(discoverPrompt(run, 650), {
+        signal: ctl.signal, cache: false, modelTier: "complex",
+        onText: ({ text }) => {
+          if (state.run !== run) return;
+          const found = (text.match(/"titulo"\s*:/g) || []).length;
+          if (found) showThinking(`${found} oportunidade${found > 1 ? "s" : ""} encontrada${found > 1 ? "s" : ""} até agora…`);
+        },
+      });
       run.opps = normalizeOpps(arr, run.refs.length);
       hideThinking();
       if (!run.opps.length) $("report").innerHTML = "<p>Não saíram oportunidades com evidência suficiente. Tente outra área ou deixe a área em branco.</p>";
       else { saveHistory(run); renderRail(); renderMain(run); }
     } catch (e) {
       hideThinking();
-      const msg = e.code === "invalid_json" ? "A resposta veio num formato inesperado. Clique em Gerar de novo." : useRemote ? remoteCopy(e) : sampleCopy(e.code);
-      $("report").innerHTML = `<p>${escapeHtml(msg)}</p>`;
+      $("report").innerHTML = `<p>${escapeHtml(e.code === "invalid_json" ? "A resposta veio num formato inesperado. Clique em Gerar de novo." : sampleCopy(e.code))}</p>`;
     } finally {
       if (state.run === run) { $("stop").hidden = true; $("regen").hidden = false; $("copy").hidden = !run.opps.length; }
     }
@@ -763,29 +779,21 @@ Escreva o relatório agora.`;
   }
 
   async function analyzeTopic(run) {
-    const useRemote = engine() === "remote";
-    if (useRemote ? !state.mcp : !state.sample) return noEngine();
+    if (engine() === "claudecode") return queueForClaudeCode(run, (n) => topicPrompt(run, n), 900);
+    if (!state.sample) return noEngine();
     const ctl = new AbortController(); state.ctl = ctl;
     $("stop").hidden = false;
     try {
-      if (useRemote) {
-        showThinking("Criando sessão remota do Claude Code…");
-        run.report = await remoteRun(fitPrompt((n) => topicPrompt(run, n), 900), `Pesquisador: ${clip(run.topic, 60)}`, ctl,
-          (s) => state.run === run && showThinking(`Sessão remota escrevendo o relatório… ${s}s (leva de 1 a 3 minutos)`));
-        hideThinking();
-      } else {
-        showThinking("O Claude está lendo as fontes. O relatório costuma começar em 20 a 60 segundos…");
-        const { text, truncated } = await state.sample(topicPrompt(run, 900), {
-          signal: ctl.signal, cache: false,
-          onText: ({ text }) => { if (state.run === run) { hideThinking(); run.report = text; if (state.view === "main") renderMain(run); } },
-        });
-        run.report = text + (truncated ? "\n\n> Relatório cortado pelo limite de tamanho." : "");
-      }
+      showThinking("O Claude está lendo as fontes. O relatório costuma começar em 20 a 60 segundos…");
+      const { text, truncated } = await state.sample(topicPrompt(run, 900), {
+        signal: ctl.signal, cache: false,
+        onText: ({ text }) => { if (state.run === run) { hideThinking(); run.report = text; if (state.view === "main") renderMain(run); } },
+      });
+      run.report = text + (truncated ? "\n\n> Relatório cortado pelo limite de tamanho." : "");
       saveHistory(run);
     } catch (e) {
       hideThinking();
-      if (useRemote) run.report = "> " + remoteCopy(e);
-      else if (e.code === "refused") run.report = "> " + sampleCopy(e.code);
+      if (e.code === "refused") run.report = "> " + sampleCopy(e.code);
       else if (e.code === "cancelled") run.report = (e.text || "") + "\n\n> Interrompido.";
       else run.report = (e.text || "") + "\n\n> " + sampleCopy(e.code);
     } finally {
@@ -798,12 +806,12 @@ Escreva o relatório agora.`;
 
   function sampleCopy(code) {
     return ({
-      not_granted: "Você não permitiu que esta página use o Claude. Recarregue e permita, ou troque a análise para \"Sessão remota\".",
-      rate_limited: "Limite de uso do Claude da conta atingido. Troque a análise para \"Sessão remota do Claude Code\" e clique em Gerar de novo.",
+      not_granted: "Você não permitiu que esta página use o Claude. Recarregue e permita, ou troque a análise para \"Claude Code\".",
+      rate_limited: "Limite de uso do Claude da conta atingido. Troque a análise para \"Claude Code\" e clique em Gerar de novo.",
       session_expired: "Sua sessão expirou. Entre de novo no claude.ai.",
       prompt_too_large: "Dados demais para uma análise. Desmarque algumas fontes e tente de novo.",
       refused: "O Claude não quis analisar esse conteúdo. Tente reformular.",
-      sampling_disabled: "O Claude não está habilitado para esta conta. Troque a análise para \"Sessão remota\".",
+      sampling_disabled: "O Claude não está habilitado para esta conta. Troque a análise para \"Claude Code\".",
       cancelled: "Interrompido.",
     })[code] || "A análise foi interrompida por um erro. Clique em Gerar de novo.";
   }
@@ -961,7 +969,7 @@ Escreva o relatório agora.`;
     $("run").scrollIntoView({ behavior: "smooth", block: "start" });
   });
 
-  try { $("engine").value = store.get("pesq.engine", "remote"); } catch {}
+  try { $("engine").value = (store.get("pesq.engine", "claudecode") === "sample" ? "sample" : "claudecode"); } catch {}
   $("engine").addEventListener("change", () => store.set("pesq.engine", engine()));
   renderHistory();
   boot();
