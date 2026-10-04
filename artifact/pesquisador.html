@@ -1,0 +1,969 @@
+<title>Pesquisador de Negócios</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one working column. Bench (Descobrir | Pesquisar tema) on top, then a source rail and the result sheet: ranked opportunity cards or a cited report. */
+:root {
+  --bg: #f3f4f6;
+  --panel: #ffffff;
+  --ink: #14161b;
+  --soft: #5c6170;
+  --line: #dfe2e8;
+  --accent: #1f5f8b;
+  --accent-ink: #ffffff;
+  --accent-wash: #e6eef5;
+  --ok: #217a4b;
+  --warn: #9a6a00;
+  --bad: #b3261e;
+  --meter-off: #e3e6ec;
+  --display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f1115; --panel: #171a20; --ink: #e8eaef; --soft: #9aa0ad; --line: #2a2f38;
+    --accent: #7db4dd; --accent-ink: #0f1115; --accent-wash: #1b2733; --meter-off: #2a2f38;
+    --ok: #5cc48a; --warn: #e0b04a; --bad: #ff8a80; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f1115; --panel: #171a20; --ink: #e8eaef; --soft: #9aa0ad; --line: #2a2f38;
+  --accent: #7db4dd; --accent-ink: #0f1115; --accent-wash: #1b2733; --meter-off: #2a2f38;
+  --ok: #5cc48a; --warn: #e0b04a; --bad: #ff8a80; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font: 15px/1.55 var(--body); }
+.wrap { max-width: 980px; margin: 0 auto; padding-inline: 16px; padding-block: 28px 64px; display: grid; gap: 18px; }
+h1, h2, h3 { font-family: var(--display); text-wrap: balance; margin: 0; }
+h1 { font-size: clamp(1.7rem, 4vw, 2.3rem); font-weight: 700; letter-spacing: -0.01em; }
+.lede { color: var(--soft); max-width: 64ch; margin: 6px 0 0; }
+.label { font: 500 0.72rem/1 var(--mono); text-transform: uppercase; letter-spacing: 0.08em; color: var(--soft); }
+a { color: var(--accent); }
+button, input, select { font: inherit; color: inherit; }
+button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.bench { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 18px; display: grid; gap: 14px; }
+.tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); margin: -4px 0 2px; }
+.tabs button { border: 0; background: transparent; padding: 8px 12px; cursor: pointer; color: var(--soft); border-bottom: 2px solid transparent; margin-bottom: -1px; font-weight: 500; }
+.tabs button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent); }
+.pane { display: grid; gap: 14px; }
+.qrow { display: flex; gap: 10px; flex-wrap: wrap; }
+.qrow input { flex: 1 1 320px; min-width: 0; padding: 12px 14px; font-size: 1.05rem; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); }
+.primary { padding: 12px 20px; border-radius: 8px; border: 1px solid var(--accent); background: var(--accent); color: var(--accent-ink); font-weight: 600; cursor: pointer; }
+.primary:disabled { opacity: 0.5; cursor: not-allowed; }
+.ghost { padding: 7px 12px; border-radius: 8px; border: 1px solid var(--line); background: transparent; cursor: pointer; }
+.opts { display: flex; gap: 14px; flex-wrap: wrap; }
+.opts label { display: grid; gap: 5px; flex: 1 1 200px; }
+select { padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); }
+.chips { display: flex; gap: 8px; flex-wrap: wrap; }
+.chip { display: inline-flex; align-items: center; gap: 6px; padding: 5px 11px; border: 1px solid var(--line); border-radius: 999px; font-size: 0.88rem; cursor: pointer; user-select: none; }
+.chip input { accent-color: var(--accent); margin: 0; }
+.examples { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; font-size: 0.88rem; color: var(--soft); }
+.examples button { border: 0; background: var(--accent-wash); color: var(--accent); padding: 4px 10px; border-radius: 999px; cursor: pointer; font-size: 0.85rem; }
+.hint { margin: 0; color: var(--soft); font-size: 0.88rem; }
+
+.status { display: flex; gap: 8px; flex-wrap: wrap; font-size: 0.85rem; }
+.pill { display: inline-flex; gap: 6px; align-items: center; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--line); background: var(--panel); }
+select.mini { padding: 2px 6px; font-size: 0.85rem; border-radius: 6px; }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--soft); flex: none; }
+.dot.ok { background: var(--ok); } .dot.warn { background: var(--warn); } .dot.bad { background: var(--bad); }
+.notice { border: 1px solid var(--line); border-left: 3px solid var(--warn); background: var(--panel); padding: 12px 14px; border-radius: 8px; font-size: 0.92rem; }
+.notice.bad { border-left-color: var(--bad); }
+
+.how { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+.how div { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px; display: grid; gap: 6px; align-content: start; }
+.how h3 { font-size: 1rem; }
+.how p { margin: 0; color: var(--soft); font-size: 0.9rem; }
+
+.run { display: grid; grid-template-columns: 250px minmax(0, 1fr); gap: 18px; align-items: start; }
+@media (max-width: 760px) { .run { grid-template-columns: 1fr; } }
+.rail { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px; display: grid; gap: 4px; position: sticky; top: calc(env(safe-area-inset-top, 0px) + 12px); }
+@media (max-width: 760px) { .rail { position: static; } }
+.src { display: grid; grid-template-columns: 10px minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 7px 8px; border-radius: 6px; border: 0; background: transparent; text-align: left; cursor: pointer; width: 100%; }
+.src:hover, .src.active { background: var(--accent-wash); }
+.src .n { font: 500 0.8rem var(--mono); color: var(--soft); font-variant-numeric: tabular-nums; }
+.src .err { grid-column: 2 / 4; font-size: 0.78rem; color: var(--bad); }
+.rail hr { border: 0; border-top: 1px solid var(--line); margin: 6px 0; width: 100%; }
+
+.sheet { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 20px; min-width: 0; display: grid; gap: 12px; }
+.sheet-head { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; justify-content: space-between; }
+.thinking { color: var(--soft); display: flex; gap: 10px; align-items: center; }
+.spin { width: 14px; height: 14px; border: 2px solid var(--line); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.9s linear infinite; flex: none; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .spin { animation: none; } }
+.report { overflow-wrap: anywhere; max-width: 72ch; }
+.report h2 { font-size: 1.25rem; margin: 22px 0 8px; }
+.report h3 { font-size: 1.05rem; margin: 16px 0 6px; }
+.report table { border-collapse: collapse; width: 100%; font-size: 0.9rem; }
+.report .tbl { overflow-x: auto; max-width: 100%; }
+.report th, .report td { border: 1px solid var(--line); padding: 6px 8px; text-align: left; vertical-align: top; }
+.report th { background: var(--accent-wash); }
+.report blockquote { margin: 8px 0; padding-left: 12px; border-left: 3px solid var(--line); color: var(--soft); }
+a.cite { font: 500 0.78em var(--mono); text-decoration: none; padding: 0 2px; }
+
+.opps { display: grid; gap: 14px; }
+.opp { border: 1px solid var(--line); border-radius: 10px; padding: 16px; display: grid; gap: 10px; min-width: 0; }
+.opp-head { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 12px; align-items: start; }
+.rank { font: 700 1.4rem/1 var(--display); color: var(--soft); font-variant-numeric: tabular-nums; min-width: 1.6em; }
+.opp h3 { font-size: 1.12rem; }
+.opp .tag { display: inline-block; margin-top: 4px; font: 500 0.72rem var(--mono); text-transform: uppercase; letter-spacing: 0.06em; color: var(--accent); }
+.score { text-align: right; }
+.score b { font: 700 1.5rem/1 var(--display); font-variant-numeric: tabular-nums; }
+.score span { display: block; font: 0.72rem var(--mono); color: var(--soft); }
+.meters { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px 16px; }
+.meter { display: grid; gap: 4px; font-size: 0.8rem; color: var(--soft); }
+.segs { display: grid; grid-template-columns: repeat(5, 1fr); gap: 3px; }
+.segs i { height: 6px; border-radius: 2px; background: var(--meter-off); }
+.segs i.on { background: var(--accent); }
+.facts { display: grid; gap: 6px; font-size: 0.92rem; }
+.facts p { margin: 0; overflow-wrap: anywhere; }
+.facts strong { font-weight: 600; }
+.opp-foot { display: flex; gap: 10px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
+.evid { font-size: 0.85rem; color: var(--soft); overflow-wrap: anywhere; }
+
+.items { list-style: none; margin: 0; padding: 0; display: grid; }
+.items li { padding: 12px 0; border-bottom: 1px solid var(--line); display: grid; gap: 4px; overflow-wrap: anywhere; }
+.items .ref { font: 500 0.78rem var(--mono); color: var(--soft); }
+.items p { margin: 0; font-size: 0.9rem; color: var(--soft); }
+
+.history { display: grid; gap: 6px; }
+.history button { text-align: left; border: 1px solid var(--line); background: var(--panel); border-radius: 8px; padding: 8px 12px; cursor: pointer; display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.history span { color: var(--soft); font: 0.8rem var(--mono); }
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="label">Pesquisa de mercado com fontes reais</div>
+    <h1>Pesquisador de Negócios</h1>
+    <p class="lede">Varre Reddit, Hacker News, Reclame Aqui e notícias atrás de pedidos e reclamações reais, e o Claude transforma isso num ranking de oportunidades com as fontes citadas.</p>
+  </header>
+
+  <section class="bench">
+    <div class="tabs" role="tablist">
+      <button type="button" role="tab" id="tab-discover" aria-selected="true">Descobrir oportunidades</button>
+      <button type="button" role="tab" id="tab-topic" aria-selected="false">Pesquisar um tema</button>
+    </div>
+
+    <form class="pane" id="formDiscover" autocomplete="off">
+      <div class="qrow">
+        <input id="area" maxlength="120" placeholder="Área (opcional): ex.: saúde, pets, restaurantes, educação" aria-label="Área">
+        <button class="primary" id="goDiscover" type="submit">Encontrar oportunidades</button>
+      </div>
+      <div class="opts">
+        <label><span class="label">Tipo de negócio</span>
+          <select id="model">
+            <option value="qualquer">Qualquer</option>
+            <option value="software">Software / app (SaaS)</option>
+            <option value="servico">Serviço</option>
+            <option value="produto">Produto físico / e-commerce</option>
+            <option value="conteudo">Conteúdo / curso / comunidade</option>
+          </select>
+        </label>
+        <label><span class="label">Região / idioma</span>
+          <select id="regionD">
+            <option value="br">Brasil + global</option>
+            <option value="us">Só global (inglês)</option>
+          </select>
+        </label>
+      </div>
+      <p class="hint">Deixe a área em branco pra varrer tudo. A coleta leva uns 20 segundos e a análise de 1 a 2 minutos.</p>
+    </form>
+
+    <form class="pane" id="formTopic" autocomplete="off" hidden>
+      <div class="qrow">
+        <input id="q" maxlength="200" placeholder="Ex.: software para clínica veterinária" aria-label="Tema da pesquisa">
+        <button class="primary" id="goTopic" type="submit">Pesquisar</button>
+      </div>
+      <div class="examples" id="examples">Exemplos:
+        <button type="button">marmita fitness por assinatura</button>
+        <button type="button">app de gestão para salão de beleza</button>
+        <button type="button">energia solar residencial</button>
+      </div>
+      <div class="opts">
+        <label><span class="label">Tipo de análise</span>
+          <select id="mode">
+            <option value="validar">Validar ideia de negócio</option>
+            <option value="mercado">Análise de mercado / nicho</option>
+            <option value="concorrentes">Monitorar concorrente</option>
+            <option value="tendencias">Encontrar tendências</option>
+          </select>
+        </label>
+        <label><span class="label">Região / idioma</span>
+          <select id="region">
+            <option value="br">Brasil (pt-BR)</option>
+            <option value="us">EUA (inglês)</option>
+          </select>
+        </label>
+      </div>
+      <div class="chips" id="chips" role="group" aria-label="Fontes"></div>
+    </form>
+  </section>
+
+  <div class="status">
+    <label class="pill" for="engine">Análise:
+      <select id="engine" class="mini">
+        <option value="remote">Sessão remota do Claude Code</option>
+        <option value="sample">Claude da conta (claude.ai)</option>
+      </select>
+    </label>
+    <span class="pill"><span class="dot" id="dot-search"></span><span id="txt-search">Busca na web: verificando…</span></span>
+    <span class="pill"><span class="dot" id="dot-claude"></span><span id="txt-claude">Claude: verificando…</span></span>
+  </div>
+  <div class="notice" id="notice" hidden></div>
+
+  <section class="how" id="how">
+    <div><span class="label">1 · Varredura</span><h3>Caça a dores reais</h3><p>Busca frases como "I wish there was an app", "I would pay for", "alguém conhece um app que", reclamações e mercados em alta.</p></div>
+    <div><span class="label">2 · Ranking</span><h3>Oportunidades com nota</h3><p>O Claude agrupa os relatos e dá nota de 1 a 5 em demanda, dor, disposição a pagar e concorrência, com as fontes de cada uma.</p></div>
+    <div><span class="label">3 · Aprofundar</span><h3>Pesquisa completa</h3><p>Em qualquer oportunidade, clique em Aprofundar pra validar a ideia em Reddit, YouTube, web, notícias e avaliações.</p></div>
+  </section>
+
+  <section id="historyBox" hidden>
+    <div class="label" style="margin-bottom:8px">Recentes (salvas neste navegador)</div>
+    <div class="history" id="history"></div>
+  </section>
+
+  <section class="run" id="run" hidden>
+    <nav class="rail" id="rail" aria-label="Fontes coletadas"></nav>
+    <article class="sheet">
+      <div class="sheet-head">
+        <h2 id="sheetTitle">Relatório</h2>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="ghost" id="stop" type="button" hidden>Parar</button>
+          <button class="ghost" id="regen" type="button" hidden>Gerar de novo</button>
+          <button class="ghost" id="copy" type="button" hidden>Copiar</button>
+        </div>
+      </div>
+      <div class="thinking" id="thinking" hidden><span class="spin"></span><span id="thinkingTxt">Coletando…</span></div>
+      <div class="report" id="report"></div>
+      <ul class="items" id="items" hidden></ul>
+    </article>
+  </section>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.2/marked.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.1.6/purify.min.js"></script>
+<script>
+(() => {
+  const SERVER = "Parallel Search";
+  const TOOL = "web_search";
+  const YEAR = new Date().getFullYear();
+
+  const MODE_LABEL = {
+    validar: "Validar ideia de negócio", mercado: "Análise de mercado / nicho",
+    concorrentes: "Monitorar concorrente", tendencias: "Encontrar tendências",
+  };
+  const MODEL_LABEL = {
+    qualquer: "qualquer tipo", software: "software / app (SaaS)", servico: "serviço",
+    produto: "produto físico / e-commerce", conteudo: "conteúdo / curso / comunidade",
+  };
+
+  // ---------- topic research sources ----------
+  const TOPIC_SOURCES = [
+    { id: "reddit", label: "Reddit", domain: "reddit.com",
+      query: (t) => [`site:reddit.com ${t}`, `${t} reddit experiences problems`],
+      objective: (t) => `Discussões no Reddit sobre "${t}": experiências reais, dores, reclamações, pedidos de recomendação e alternativas usadas.` },
+    { id: "youtube", label: "YouTube", domain: "youtube.com",
+      query: (t) => [`site:youtube.com ${t}`, `${t} review youtube`],
+      objective: (t) => `Vídeos do YouTube sobre "${t}": análises, tutoriais, reviews e depoimentos.` },
+    { id: "web", label: "Web (Google)", domain: null,
+      query: (t, m) => ({ validar: [`${t} problemas`, `${t} preço alternativas`], mercado: [`${t} mercado tamanho`, `${t} principais concorrentes`], concorrentes: [`${t} avaliação`, `${t} prós e contras`], tendencias: [`${t} tendência ${YEAR}`, `${t} crescimento`] })[m],
+      objective: (t, m) => `Páginas relevantes sobre "${t}" para ${MODE_LABEL[m].toLowerCase()}: dados de mercado, concorrentes, preços e opiniões.` },
+    { id: "news", label: "Notícias", domain: null,
+      query: (t, m, r) => r === "br" ? [`${t} notícias ${YEAR}`, `${t} lançamento investimento`] : [`${t} news ${YEAR}`, `${t} funding launch`],
+      objective: (t) => `Notícias recentes (${YEAR - 1}-${YEAR}) sobre "${t}": lançamentos, investimentos, regulação, movimentos de empresas.` },
+    { id: "reviews", label: "Avaliações", domain: (r) => r === "br" ? "reclameaqui.com.br" : null,
+      query: (t, m, r) => r === "br" ? [`site:reclameaqui.com.br ${t}`, `${t} reclamação`] : [`${t} reviews complaints`, `${t} customer complaints`],
+      objective: (t, m, r) => r === "br" ? `Reclamações no Reclame Aqui sobre "${t}".` : `Reviews e reclamações de clientes sobre "${t}".` },
+    { id: "hn", label: "Hacker News", domain: "news.ycombinator.com",
+      query: (t) => [`site:news.ycombinator.com ${t}`, `${t} hacker news discussion`],
+      objective: (t) => `Discussões no Hacker News sobre "${t}": opiniões de fundadores e desenvolvedores, produtos, críticas.` },
+  ];
+
+  // ---------- discovery scans: phrases people use when a product is missing ----------
+  function discoverySpecs(area, region) {
+    const a = area ? " " + area : "";
+    const ctx = area ? ` na área de "${area}"` : "";
+    const specs = [
+      { id: "wish", label: "Reddit: \"I wish there was\"", domain: "reddit.com",
+        query: [`site:reddit.com "I wish there was"${a || " an app"}`, `"somebody make this"${a}`],
+        objective: `Posts no Reddit onde pessoas dizem que gostariam que existisse um produto ou serviço${ctx}.` },
+      { id: "pay", label: "Reddit: \"I would pay for\"", domain: "reddit.com",
+        query: [`site:reddit.com "I would pay for"${a}`, `reddit "shut up and take my money"${a}`],
+        objective: `Posts no Reddit onde pessoas dizem que pagariam por uma solução${ctx}.` },
+      { id: "istool", label: "Reddit: \"is there a tool\"", domain: "reddit.com",
+        query: [`site:reddit.com "is there an app"${a}`, `site:reddit.com "is there a tool"${a}`],
+        objective: `Pessoas procurando uma ferramenta ou app que talvez não exista${ctx}.` },
+      { id: "frustr", label: "Reddit: frustração com ferramentas", domain: "reddit.com",
+        query: [`site:reddit.com "alternative to"${a} frustrated`, `site:reddit.com "hate using"${a}`],
+        objective: `Reclamações sobre produtos existentes e busca por alternativas${ctx}.` },
+      { id: "askhn", label: "Hacker News: problemas", domain: "news.ycombinator.com",
+        query: [`"Ask HN" biggest problem${a}`, `"Ask HN" tool you wish existed${a}`],
+        objective: `Threads Ask HN sobre problemas não resolvidos e ferramentas desejadas${ctx}.` },
+      { id: "growth", label: "Mercados em crescimento", domain: null,
+        query: [`${area || "small business"} fastest growing niche ${YEAR}`, `${area || "emerging"} market growth ${YEAR}`],
+        objective: `Nichos e mercados que estão crescendo em ${YEAR}${ctx}, com dados.` },
+      { id: "funding", label: "Startups recebendo investimento", domain: null,
+        query: [`startup${a} raises seed ${YEAR}`, `${area ? area + " " : ""}startup funding round ${YEAR}`],
+        objective: `Startups${ctx} que receberam investimento recentemente: o que fazem e para quem.` },
+    ];
+    if (region === "br") {
+      specs.push(
+        { id: "brwish", label: "Brasil: \"alguém conhece um app\"", domain: null,
+          query: [`"alguém conhece" aplicativo${a}`, `"queria que existisse" app${a}`],
+          objective: `Brasileiros procurando um app, sistema ou serviço${ctx} em fóruns, Reddit e redes.` },
+        { id: "brcomplain", label: "Brasil: reclamações", domain: area ? "reclameaqui.com.br" : null,
+          query: area ? [`site:reclameaqui.com.br${a}`, `${area} reclamação clientes`] : [`setores mais reclamações ${YEAR}`, `ranking reclamações Reclame Aqui ${YEAR}`],
+          objective: area ? `Reclamações de consumidores no Reclame Aqui sobre ${area}.` : `Setores e empresas com mais reclamações de consumidores no Brasil em ${YEAR}.` },
+        { id: "brtrend", label: "Brasil: negócios em alta", domain: null,
+          query: [`${area ? area + " " : ""}mercado crescimento Brasil ${YEAR}`, `${area ? area + " " : ""}oportunidade negócio Brasil ${YEAR}`],
+          objective: `Mercados e nichos crescendo no Brasil em ${YEAR}${ctx}, com dados e fontes.` },
+      );
+    }
+    return specs;
+  }
+
+  const MODE_STRUCT = {
+    validar: `## Veredito rápido (demanda: forte / moderada / fraca / sem evidência, e por quê)
+## Dores reais encontradas (tabela: dor | intensidade | citações)
+## O que as pessoas usam hoje e do que reclamam
+## Sinais de disposição para pagar
+## Riscos e sinais contrários
+## Próximos passos de validação (experimentos baratos e concretos)`,
+    mercado: `## Resumo do nicho
+## Direção da demanda (volume de discussão, datas, engajamento)
+## Segmentos de público e o que cada um busca
+## Principais players e posicionamento (só os que aparecem nos dados)
+## Lacunas e oportunidades
+## Perguntas que o público faz
+## Dados que faltam para decidir`,
+    concorrentes: `## Resumo da percepção pública
+## Elogios recorrentes (tabela: ponto | citações)
+## Reclamações recorrentes (tabela: problema | gravidade | citações)
+## Notícias e movimentos recentes
+## Alternativas que as pessoas mencionam
+## Oportunidades para competir`,
+    tendencias: `## Resumo
+## Direção (crescendo / estável / caindo, com base nas datas e no volume)
+## Subtemas em alta
+## Quem está falando disso (comunidades, canais, veículos)
+## Oportunidades de produto ou conteúdo
+## Sinais de modismo passageiro`,
+  };
+
+  const METRICS = [
+    ["demanda", "Demanda"], ["dor", "Intensidade da dor"],
+    ["pagamento", "Disposição a pagar"], ["espaco", "Espaço vs. concorrência"],
+  ];
+
+  const $ = (id) => document.getElementById(id);
+  const state = { mcp: null, sample: null, run: null, ctl: null, view: "main" };
+
+  const store = {
+    get(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch { return d; } },
+    set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
+  };
+
+  // ---------- tabs ----------
+  function showTab(which) {
+    $("tab-discover").setAttribute("aria-selected", String(which === "discover"));
+    $("tab-topic").setAttribute("aria-selected", String(which === "topic"));
+    $("formDiscover").hidden = which !== "discover";
+    $("formTopic").hidden = which !== "topic";
+  }
+  $("tab-discover").onclick = () => showTab("discover");
+  $("tab-topic").onclick = () => showTab("topic");
+
+  // ---------- topic source chips ----------
+  const savedSources = store.get("pesq.sources", TOPIC_SOURCES.map((s) => s.id));
+  $("chips").innerHTML = TOPIC_SOURCES.map((s) =>
+    `<label class="chip"><input type="checkbox" id="src-${s.id}" value="${s.id}" ${savedSources.includes(s.id) ? "checked" : ""}>${s.label}</label>`).join("");
+  $("chips").addEventListener("change", () => store.set("pesq.sources", TOPIC_SOURCES.filter((s) => $("src-" + s.id).checked).map((s) => s.id)));
+  $("examples").addEventListener("click", (e) => {
+    if (e.target.tagName === "BUTTON") { $("q").value = e.target.textContent; $("q").focus(); }
+  });
+
+  // ---------- status ----------
+  function setPill(which, cls, text) { $("dot-" + which).className = "dot " + cls; $("txt-" + which).textContent = text; }
+  function notice(html, bad) {
+    $("notice").innerHTML = html; $("notice").className = "notice" + (bad ? " bad" : ""); $("notice").hidden = !html;
+  }
+
+  async function boot() {
+    const use = (n) => (window.claude && window.claude.use ? window.claude.use(n) : Promise.resolve(null));
+    const [mcp, sample] = await Promise.all([use("mcp"), use("sample")]);
+    state.mcp = mcp; state.sample = sample;
+    setPill("claude", sample ? "ok" : "bad", sample ? "Claude: pronto (pede permissão no 1º uso)" : "Claude: indisponível nesta visualização");
+    if (!mcp) {
+      setPill("search", "bad", "Busca na web: indisponível");
+      notice("Esta visualização não consegue usar conectores. Abra o artefato pelo claude.ai, logado na sua conta.", true);
+      return;
+    }
+    try {
+      const { servers } = await mcp.listTools(SERVER);
+      const s = servers.find((x) => x.server === SERVER);
+      if (!s || (s.tools.length === 0 && s.authStatus !== "unknown")) {
+        setPill("search", "bad", "Busca na web: conector não adicionado");
+        notice(`Adicione o conector <strong>Parallel Search</strong> em claude.ai → Configurações → Conectores. É gratuito e não pede login. Depois recarregue esta página.`, true);
+      } else if (s.authStatus === "needs_reauth") {
+        setPill("search", "warn", "Busca na web: reconectar");
+        notice("Reconecte o Parallel Search em claude.ai → Configurações → Conectores.", true);
+      } else setPill("search", "ok", "Busca na web: Parallel Search");
+    } catch { setPill("search", "warn", "Busca na web: status desconhecido"); }
+  }
+
+  // ---------- connector input ----------
+  // Parallel Search web_search: {objective: string, search_queries: string[] (2-3, 3-6 words each), session_id?}.
+  // session_id should stay stable per viewer (the connector uses it for free-tier rate limiting).
+  const SESSION_ID = (() => {
+    let id = store.get("pesq.sid", null);
+    if (!id) {
+      id = Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) => b.toString(16).padStart(2, "0")).join("");
+      store.set("pesq.sid", id);
+    }
+    return id;
+  })();
+  function buildInput(queries, objective) {
+    return { objective, search_queries: queries.slice(0, 3), session_id: SESSION_ID };
+  }
+
+  // ---------- result extraction (shape-agnostic) ----------
+  function extractResults(result) {
+    let data = result && result.payload !== undefined ? result.payload : null;
+    if (data == null && result && Array.isArray(result.content)) {
+      data = result.content.filter((b) => b.type === "text").map((b) => b.text).join("\n");
+    }
+    if (typeof data === "string") { try { data = JSON.parse(data); } catch { return fromText(data); } }
+    const out = []; const seen = new Set();
+    (function walk(v, depth) {
+      if (!v || depth > 7) return;
+      if (Array.isArray(v)) { v.forEach((x) => walk(x, depth + 1)); return; }
+      if (typeof v !== "object") return;
+      const url = v.url || v.link || v.href || v.source_url;
+      if (typeof url === "string" && /^https?:\/\//.test(url)) {
+        if (!seen.has(url)) {
+          seen.add(url);
+          let text = v.excerpts || v.excerpt || v.snippet || v.content || v.text || v.description || v.summary || "";
+          if (Array.isArray(text)) text = text.join(" … ");
+          out.push({ url, title: String(v.title || v.name || url), text: String(text), date: String(v.publish_date || v.published_date || v.date || v.publishedAt || "") });
+        }
+        return;
+      }
+      Object.values(v).forEach((x) => walk(x, depth + 1));
+    })(data, 0);
+    return out;
+  }
+  function fromText(text) {
+    const out = []; const seen = new Set(); const re = /https?:\/\/[^\s)\]>"']+/g; let m;
+    while ((m = re.exec(text))) {
+      const url = m[0].replace(/[.,;]+$/, ""); if (seen.has(url)) continue; seen.add(url);
+      out.push({ url, title: url, text: text.slice(Math.max(0, m.index - 300), m.index + 500).replace(/\s+/g, " "), date: "" });
+    }
+    return out;
+  }
+  const clip = (s, n) => (s = String(s || "").replace(/\s+/g, " ").trim()).length > n ? s.slice(0, n) + "…" : s;
+  const host = (u) => { try { return new URL(u).hostname.replace(/^www\./, ""); } catch { return ""; } };
+  const escapeHtml = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+
+  const MCP_COPY = {
+    server_not_connected: "Conector Parallel Search não adicionado. Adicione em claude.ai → Configurações → Conectores.",
+    needs_reauth: "Reconecte o Parallel Search em claude.ai → Configurações → Conectores.",
+    not_in_manifest: "Você não liberou o Parallel Search para esta página. Recarregue e permita quando for perguntado.",
+    selection_required: "Há mais de um conector com esse nome. Escolha um no aviso do claude.ai.",
+    blocked_by_policy: "A política da sua organização bloqueia essa ferramenta.",
+    approval_required: "A sua organização exige aprovação por chamada, o que artefatos ainda não suportam.",
+    server_unavailable: "O Parallel Search não respondeu. Tente de novo em instantes.",
+    tool_error: "A busca retornou erro.",
+    not_granted: "Esta visualização não tem acesso a conectores.",
+  };
+
+  async function runSpec(spec, perSource) {
+    const queries = Array.isArray(spec.query) ? spec.query : [spec.query];
+    const input = buildInput(queries, spec.objective);
+    const call = () => state.mcp.callTool(SERVER, TOOL, input);
+    let res;
+    try { res = await call(); }
+    catch (e) {
+      if (!e || !e.retryable) throw e;
+      await new Promise((r) => setTimeout(r, Math.min(e.retryAfterMs || 1500 + Math.random() * 1000, 8000)));
+      res = await call();
+    }
+    let items = extractResults(res); let note = null;
+    if (spec.domain) {
+      const onDom = items.filter((i) => host(i.url).endsWith(spec.domain));
+      if (onDom.length) items = onDom; else if (items.length) note = "nenhum resultado do domínio; mostrando o que veio";
+    }
+    return { items: items.slice(0, perSource), note };
+  }
+
+  // Runs every spec in parallel, de-duplicates URLs across sources, numbers them [1..n].
+  async function collect(run, specs, perSource) {
+    run.sources = specs.map((s) => ({ id: s.id, label: s.label, query: s.query, status: "loading", items: [], error: null }));
+    renderRail();
+    const seen = new Set();
+    await Promise.all(specs.map(async (spec, i) => {
+      const slot = run.sources[i];
+      try {
+        const { items, note } = await runSpec(spec, perSource);
+        slot.items = items.filter((it) => !seen.has(it.url) && seen.add(it.url));
+        slot.note = note; slot.status = "ok";
+      } catch (err) {
+        slot.status = "error";
+        slot.error = (MCP_COPY[err && err.code] || "Falha na busca.") + (err && err.code === "tool_error" && err.message ? " " + clip(err.message, 400) : "");
+      }
+      if (state.run === run) renderRail();
+    }));
+    let n = 0; run.refs = [];
+    for (const s of run.sources) for (const it of s.items) { it.n = ++n; run.refs.push(it); }
+    return n;
+  }
+
+  function dataBlock(run, textLen) {
+    return run.sources.map((s) => {
+      if (s.error) return `### ${s.label}\n(indisponível: ${s.error})`;
+      if (!s.items.length) return `### ${s.label}\n(nenhum resultado)`;
+      return `### ${s.label} (buscas: ${[].concat(s.query).join(" | ")})\n` + s.items.map((it) =>
+        `[${it.n}] ${clip(it.title, 180)} | ${host(it.url)}${it.date ? " | " + clip(it.date, 25) : ""}\n${clip(it.text, textLen)}`).join("\n\n");
+    }).join("\n\n---\n\n");
+  }
+
+  // ---------- starting a run ----------
+  function startRun(run, title) {
+    state.ctl?.abort();
+    state.run = run; state.view = "main";
+    $("how").hidden = true; $("run").hidden = false;
+    $("report").innerHTML = ""; $("report").hidden = false; $("items").hidden = true;
+    $("regen").hidden = true; $("copy").hidden = true; $("stop").hidden = true;
+    $("sheetTitle").textContent = title;
+    $("goDiscover").disabled = true; $("goTopic").disabled = true;
+    showThinking("Coletando dados das fontes…");
+  }
+  function endCollect() { $("goDiscover").disabled = false; $("goTopic").disabled = false; }
+  function noResults(run) {
+    hideThinking();
+    const err = run.sources.find((s) => s.error);
+    $("report").innerHTML = `<p>Nenhuma fonte retornou resultados.${err ? " " + escapeHtml(err.error) : ""}</p>`;
+  }
+
+  $("formDiscover").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    if (!state.mcp) { notice("Os conectores não estão disponíveis nesta visualização.", true); return; }
+    const run = { kind: "discover", area: $("area").value.trim(), model: $("model").value, region: $("regionD").value, at: Date.now(), opps: [] };
+    startRun(run, "Oportunidades");
+    const total = await collect(run, discoverySpecs(run.area, run.region), 12);
+    endCollect();
+    if (state.run !== run) return;
+    if (!total) return noResults(run);
+    renderRail();
+    await discover(run);
+  });
+
+  $("formTopic").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const topic = $("q").value.trim();
+    const chosen = TOPIC_SOURCES.filter((s) => $("src-" + s.id).checked);
+    if (!topic || !chosen.length) return;
+    if (!state.mcp) { notice("Os conectores não estão disponíveis nesta visualização.", true); return; }
+    const run = { kind: "topic", topic, mode: $("mode").value, region: $("region").value, at: Date.now(), report: "" };
+    startRun(run, "Relatório");
+    const specs = chosen.map((s) => ({
+      id: s.id, label: s.label, domain: typeof s.domain === "function" ? s.domain(run.region) : s.domain,
+      query: s.query(topic, run.mode, run.region), objective: s.objective(topic, run.mode, run.region),
+    }));
+    const total = await collect(run, specs, 15);
+    endCollect();
+    if (state.run !== run) return;
+    if (!total) return noResults(run);
+    renderRail();
+    await analyzeTopic(run);
+  });
+
+  // ---------- discovery analysis ----------
+  function discoverPrompt(run, textLen) {
+    return `Você é um analista de oportunidades de negócio. Abaixo estão resultados de busca coletados agora, de fontes reais: pessoas pedindo produtos que não existem, dizendo que pagariam por algo, reclamando de ferramentas atuais, além de mercados em crescimento e startups recém-financiadas.
+
+Tarefa: identifique de 6 a 10 oportunidades de negócio concretas que esses dados sustentam e ordene da melhor para a pior.
+
+Filtros do usuário:
+- Área: ${run.area || "qualquer"}
+- Tipo de negócio preferido: ${MODEL_LABEL[run.model]}
+- Público: ${run.region === "br" ? "de preferência viável no Brasil (pode se inspirar em demandas globais)" : "global / EUA"}
+
+Regras de evidência:
+- Cada oportunidade precisa de pelo menos 2 evidências diferentes, citadas pelos números [n] dos dados. Prefira oportunidades em que várias pessoas independentes relatam a mesma dor.
+- Use só o que os trechos dizem. Não invente números, empresas ou preços.
+- As notas vão de 1 a 5 e precisam ser justificáveis pelos trechos: "demanda" = quantas pessoas pedem; "dor" = quão grave e frequente; "pagamento" = sinais explícitos de que pagariam; "espaco" = 5 se não há solução boa citada, 1 se o mercado já é dominado.
+- Seja específico: "app de agendamento para pet sitters autônomos" é bom; "app para pets" é vago demais.
+- Escreva em português do Brasil.
+
+Responda SOMENTE com um array JSON, sem texto fora dele, neste formato:
+[{"titulo": "nome curto da oportunidade", "tipo": "software | serviço | produto | conteúdo", "problema": "a dor, em 1-2 frases", "publico": "quem sofre com isso", "solucao": "o que construir, em 1-2 frases", "evidencias": [3, 17, 22], "notas": {"demanda": 4, "dor": 5, "pagamento": 3, "espaco": 4}, "por_que_agora": "1 frase", "risco": "o maior risco, 1 frase", "busca": "termo curto para pesquisar a ideia a fundo"}]
+
+<dados_coletados>
+${dataBlock(run, textLen)}
+</dados_coletados>`;
+  }
+
+  // ---------- analysis engines ----------
+  // "remote": a Claude Code Remote session (billed to the viewer's Claude Code usage).
+  // "sample": the viewer's claude.ai Claude, through the sample capability.
+  const REMOTE = "Claude Code Remote";
+  const REMOTE_PREFIX = "Você está sendo usado como motor de análise de um app de pesquisa de negócios. Não use nenhuma ferramenta, não leia nem crie arquivos, não faça commits: responda direto, usando apenas os dados abaixo.\n\n";
+  const REMOTE_MAX_CHARS = 55000;
+  const sleep = (ms, signal) => new Promise((resolve, reject) => {
+    const t = setTimeout(resolve, ms);
+    signal?.addEventListener("abort", () => { clearTimeout(t); reject({ code: "cancelled" }); }, { once: true });
+  });
+  const ccr = (p) => (p && typeof p === "object" && p.ccr) || p || {};
+  const rc = async (tool, input) => ccr((await state.mcp.callTool(REMOTE, tool, input, { cache: false })).payload);
+
+  // Shrinks excerpts until the prompt fits what a new session accepts as its first message.
+  function fitPrompt(build, startLen) {
+    let len = startLen, p = build(len);
+    while (p.length > REMOTE_MAX_CHARS && len > 150) { len -= 100; p = build(len); }
+    return p;
+  }
+
+  async function remoteRun(prompt, title, ctl, onTick) {
+    const envs = (await rc("list_environments", { limit: 20 })).environments || [];
+    const env = envs.find((e) => e.state === "active" && e.kind === "anthropic_cloud") || envs.find((e) => e.state === "active") || envs[0];
+    if (!env) throw { code: "no_env" };
+    const s = await rc("create_session", { environment_id: env.environment_id, title, tags: ["pesquisador"], prompt: REMOTE_PREFIX + prompt });
+    const sid = s.id;
+    if (!sid) throw { code: "remote_error", message: "a sessão não foi criada" };
+    const t0 = Date.now();
+    let after;
+    try {
+      while (Date.now() - t0 < 10 * 60 * 1000) {
+        await sleep(5000, ctl.signal);
+        onTick(Math.round((Date.now() - t0) / 1000));
+        let page;
+        do {
+          const input = { session_id: sid, kinds: ["result"], limit: 100 };
+          if (after) input.after_id = after;
+          page = await rc("list_events", input);
+          if (page.last_id) after = page.last_id;
+          for (const ev of page.data || []) {
+            const r = ev.result && (ev.result.internal_anthropic_catchall || ev.result);
+            if (!r) continue;
+            if (r.is_error || (r.subtype && r.subtype !== "success")) throw { code: "remote_error", message: String(r.result || r.subtype || "") };
+            return String(r.result || "");
+          }
+        } while (page.has_more);
+      }
+      throw { code: "remote_timeout" };
+    } finally {
+      rc("archive_session", { session_id: sid }).catch(() => {});
+    }
+  }
+
+  function parseJsonLoose(text) {
+    const t = String(text || "").trim();
+    try { return JSON.parse(t); } catch {}
+    const fence = t.match(/```(?:json)?\s*([\s\S]*?)```/);
+    if (fence) { try { return JSON.parse(fence[1]); } catch {} }
+    const a = t.indexOf("["), b = t.lastIndexOf("]");
+    if (a >= 0 && b > a) { try { return JSON.parse(t.slice(a, b + 1)); } catch {} }
+    return null;
+  }
+
+  function remoteCopy(e) {
+    if (e && e.code === "cancelled") return "Interrompido.";
+    if (e && e.code === "no_env") return "Nenhum ambiente do Claude Code encontrado na sua conta. Abra claude.ai/code uma vez para criar o ambiente padrão.";
+    if (e && e.code === "remote_timeout") return "A sessão remota passou de 10 minutos sem responder. Clique em Gerar de novo.";
+    if (e && e.code === "remote_error") return "A sessão remota terminou com erro" + (e.message ? ": " + clip(e.message, 300) : ".");
+    if (e && e.code === "server_not_connected") return "O conector Claude Code Remote não está disponível para a sua conta. Troque a análise para \"Claude da conta\".";
+    if (e && e.code === "not_in_manifest") return "Você não liberou o Claude Code Remote para esta página. Recarregue e permita quando for perguntado.";
+    return (MCP_COPY[e && e.code] || "Falha ao falar com a sessão remota.") + (e && e.message ? " " + clip(e.message, 200) : "");
+  }
+
+  const engine = () => $("engine").value;
+  function noEngine() {
+    hideThinking();
+    $("report").innerHTML = "<p>Nenhum motor de análise disponível nesta visualização. As fontes coletadas estão na lista ao lado.</p>";
+  }
+
+  // ---------- discovery analysis ----------
+  async function discover(run) {
+    const useRemote = engine() === "remote";
+    if (useRemote ? !state.mcp : !state.sample) return noEngine();
+    const ctl = new AbortController(); state.ctl = ctl;
+    $("stop").hidden = false;
+    try {
+      let arr;
+      if (useRemote) {
+        showThinking(`Criando sessão remota do Claude Code para analisar ${run.refs.length} resultados…`);
+        const text = await remoteRun(fitPrompt((n) => discoverPrompt(run, n), 650), `Pesquisador: oportunidades${run.area ? " em " + run.area : ""}`, ctl,
+          (s) => state.run === run && showThinking(`Sessão remota montando o ranking… ${s}s (leva de 1 a 3 minutos)`));
+        arr = parseJsonLoose(text);
+        if (!Array.isArray(arr)) throw { code: "invalid_json" };
+      } else {
+        showThinking(`O Claude está lendo ${run.refs.length} resultados e montando o ranking. Leva de 1 a 2 minutos…`);
+        arr = await state.sample.json(discoverPrompt(run, 650), {
+          signal: ctl.signal, cache: false, modelTier: "complex",
+          onText: ({ text }) => {
+            if (state.run !== run) return;
+            const found = (text.match(/"titulo"\s*:/g) || []).length;
+            if (found) showThinking(`${found} oportunidade${found > 1 ? "s" : ""} encontrada${found > 1 ? "s" : ""} até agora…`);
+          },
+        });
+      }
+      run.opps = normalizeOpps(arr, run.refs.length);
+      hideThinking();
+      if (!run.opps.length) $("report").innerHTML = "<p>Não saíram oportunidades com evidência suficiente. Tente outra área ou deixe a área em branco.</p>";
+      else { saveHistory(run); renderRail(); renderMain(run); }
+    } catch (e) {
+      hideThinking();
+      const msg = e.code === "invalid_json" ? "A resposta veio num formato inesperado. Clique em Gerar de novo." : useRemote ? remoteCopy(e) : sampleCopy(e.code);
+      $("report").innerHTML = `<p>${escapeHtml(msg)}</p>`;
+    } finally {
+      if (state.run === run) { $("stop").hidden = true; $("regen").hidden = false; $("copy").hidden = !run.opps.length; }
+    }
+  }
+
+  function normalizeOpps(arr, maxRef) {
+    if (!Array.isArray(arr)) return [];
+    const n5 = (v) => Math.max(1, Math.min(5, Math.round(Number(v) || 1)));
+    return arr.filter((o) => o && typeof o === "object" && o.titulo).map((o) => {
+      const notas = {}; for (const [k] of METRICS) notas[k] = n5(o.notas && o.notas[k]);
+      const evid = [...new Set((Array.isArray(o.evidencias) ? o.evidencias : []).map(Number).filter((x) => Number.isInteger(x) && x >= 1 && x <= maxRef))];
+      return {
+        titulo: String(o.titulo), tipo: String(o.tipo || ""), problema: String(o.problema || ""), publico: String(o.publico || ""),
+        solucao: String(o.solucao || ""), por_que_agora: String(o.por_que_agora || ""), risco: String(o.risco || ""),
+        busca: String(o.busca || o.titulo), evidencias: evid, notas,
+        total: METRICS.reduce((s, [k]) => s + notas[k], 0),
+      };
+    }).filter((o) => o.evidencias.length >= 1).sort((a, b) => b.total - a.total || b.evidencias.length - a.evidencias.length);
+  }
+
+  // ---------- topic analysis ----------
+  function topicPrompt(run, textLen) {
+    return `Você é um analista de pesquisa de mercado. Abaixo estão resultados de busca coletados agora, de fontes reais, sobre um tema de negócio. Escreva um relatório em português do Brasil, em Markdown.
+
+Regras de evidência:
+- Baseie cada afirmação nos dados abaixo e cite com o número entre colchetes, ex.: [3] ou [3][12]. Toda conclusão importante precisa de citação.
+- Não invente números, tamanhos de mercado, preços ou empresas que não aparecem nos dados. Se faltar um dado importante, diga que falta e como obtê-lo.
+- Diferencie sinal forte (vários relatos independentes) de sinal fraco (um resultado isolado). Diga quando a amostra é pequena ou enviesada.
+- Os trechos são excertos de busca, não as páginas inteiras: não afirme o que eles não dizem.
+- Seja direto. Prefira listas e tabelas curtas.
+
+Tema: "${run.topic}"
+Tipo de análise: ${MODE_LABEL[run.mode]}
+Região priorizada: ${run.region === "br" ? "Brasil" : "EUA"}
+
+Use esta estrutura:
+${MODE_STRUCT[run.mode]}
+
+<dados_coletados>
+${dataBlock(run, textLen)}
+</dados_coletados>
+
+Escreva o relatório agora.`;
+  }
+
+  async function analyzeTopic(run) {
+    const useRemote = engine() === "remote";
+    if (useRemote ? !state.mcp : !state.sample) return noEngine();
+    const ctl = new AbortController(); state.ctl = ctl;
+    $("stop").hidden = false;
+    try {
+      if (useRemote) {
+        showThinking("Criando sessão remota do Claude Code…");
+        run.report = await remoteRun(fitPrompt((n) => topicPrompt(run, n), 900), `Pesquisador: ${clip(run.topic, 60)}`, ctl,
+          (s) => state.run === run && showThinking(`Sessão remota escrevendo o relatório… ${s}s (leva de 1 a 3 minutos)`));
+        hideThinking();
+      } else {
+        showThinking("O Claude está lendo as fontes. O relatório costuma começar em 20 a 60 segundos…");
+        const { text, truncated } = await state.sample(topicPrompt(run, 900), {
+          signal: ctl.signal, cache: false,
+          onText: ({ text }) => { if (state.run === run) { hideThinking(); run.report = text; if (state.view === "main") renderMain(run); } },
+        });
+        run.report = text + (truncated ? "\n\n> Relatório cortado pelo limite de tamanho." : "");
+      }
+      saveHistory(run);
+    } catch (e) {
+      hideThinking();
+      if (useRemote) run.report = "> " + remoteCopy(e);
+      else if (e.code === "refused") run.report = "> " + sampleCopy(e.code);
+      else if (e.code === "cancelled") run.report = (e.text || "") + "\n\n> Interrompido.";
+      else run.report = (e.text || "") + "\n\n> " + sampleCopy(e.code);
+    } finally {
+      if (state.run === run) {
+        $("stop").hidden = true; $("regen").hidden = false; $("copy").hidden = !run.report;
+        if (state.view === "main") renderMain(run);
+      }
+    }
+  }
+
+  function sampleCopy(code) {
+    return ({
+      not_granted: "Você não permitiu que esta página use o Claude. Recarregue e permita, ou troque a análise para \"Sessão remota\".",
+      rate_limited: "Limite de uso do Claude da conta atingido. Troque a análise para \"Sessão remota do Claude Code\" e clique em Gerar de novo.",
+      session_expired: "Sua sessão expirou. Entre de novo no claude.ai.",
+      prompt_too_large: "Dados demais para uma análise. Desmarque algumas fontes e tente de novo.",
+      refused: "O Claude não quis analisar esse conteúdo. Tente reformular.",
+      sampling_disabled: "O Claude não está habilitado para esta conta. Troque a análise para \"Sessão remota\".",
+      cancelled: "Interrompido.",
+    })[code] || "A análise foi interrompida por um erro. Clique em Gerar de novo.";
+  }
+
+  // ---------- rendering ----------
+  function showThinking(t) { $("thinking").hidden = false; $("thinkingTxt").textContent = t; }
+  function hideThinking() { $("thinking").hidden = true; }
+
+  function renderRail() {
+    const run = state.run; if (!run || !run.sources) return;
+    const total = run.sources.reduce((n, s) => n + s.items.length, 0);
+    const mainLabel = run.kind === "discover" ? "Oportunidades" : "Relatório";
+    let html = `<button class="src ${state.view === "main" ? "active" : ""}" data-view="main" type="button"><span class="dot ok"></span><span>${mainLabel}</span><span class="n">${run.kind === "discover" && run.opps?.length ? run.opps.length : ""}</span></button>
+      <button class="src ${state.view === "all" ? "active" : ""}" data-view="all" type="button"><span class="dot"></span><span>Todas as fontes</span><span class="n">${total}</span></button><hr>`;
+    run.sources.forEach((s, i) => {
+      const cls = s.status === "ok" ? (s.items.length ? "ok" : "warn") : s.status === "error" ? "bad" : "";
+      html += `<button class="src ${state.view === String(i) ? "active" : ""}" data-view="${i}" type="button">
+        <span class="dot ${cls}"></span><span>${escapeHtml(s.label)}</span>
+        <span class="n">${s.status === "loading" ? "…" : s.items.length}</span>
+        ${s.error ? `<span class="err">${escapeHtml(s.error)}</span>` : s.note ? `<span class="err" style="color:var(--warn)">${escapeHtml(s.note)}</span>` : ""}
+      </button>`;
+    });
+    $("rail").innerHTML = html;
+  }
+
+  $("rail").addEventListener("click", (e) => {
+    const b = e.target.closest("[data-view]"); if (!b || !state.run) return;
+    state.view = b.dataset.view; renderRail();
+    if (state.view === "main") {
+      $("items").hidden = true; $("report").hidden = false;
+      $("sheetTitle").textContent = state.run.kind === "discover" ? "Oportunidades" : "Relatório";
+      renderMain(state.run);
+    } else renderItems(state.run, state.view);
+  });
+
+  function renderItems(run, view) {
+    const src = view === "all" ? null : run.sources[Number(view)];
+    const list = src ? src.items : run.sources.flatMap((s) => s.items);
+    $("sheetTitle").textContent = src ? src.label : "Todas as fontes";
+    $("report").hidden = true; $("items").hidden = false;
+    $("items").innerHTML = list.length ? list.map((it) => `<li>
+      <span class="ref">[${it.n}] ${escapeHtml(host(it.url))}${it.date ? " · " + escapeHtml(clip(it.date, 25)) : ""}</span>
+      <a href="${escapeHtml(it.url)}" target="_blank" rel="noopener">${escapeHtml(clip(it.title, 200))}</a>
+      ${it.text ? `<p>${escapeHtml(clip(it.text, 420))}</p>` : ""}</li>`).join("") : "<li><p>Sem resultados nesta fonte.</p></li>";
+  }
+
+  function renderMain(run) {
+    if (run.kind === "discover") return renderOpps(run);
+    renderReport(run);
+  }
+
+  const citeLink = (run, n) => {
+    const r = run.refs[n - 1];
+    return r ? `<a class="cite" href="${escapeHtml(r.url)}" target="_blank" rel="noopener" title="${escapeHtml(clip(r.title, 120))}">[${n}]</a>` : "";
+  };
+
+  function renderOpps(run) {
+    $("report").innerHTML = `<div class="opps">${run.opps.map((o, i) => `
+      <div class="opp">
+        <div class="opp-head">
+          <span class="rank">${i + 1}</span>
+          <div><h3>${escapeHtml(o.titulo)}</h3>${o.tipo ? `<span class="tag">${escapeHtml(o.tipo)}</span>` : ""}</div>
+          <div class="score"><b>${o.total}</b><span>de 20</span></div>
+        </div>
+        <div class="meters">${METRICS.map(([k, label]) => `
+          <div class="meter"><span>${label}: ${o.notas[k]}/5</span><div class="segs">${[1, 2, 3, 4, 5].map((s) => `<i class="${s <= o.notas[k] ? "on" : ""}"></i>`).join("")}</div></div>`).join("")}
+        </div>
+        <div class="facts">
+          ${o.problema ? `<p><strong>Dor:</strong> ${escapeHtml(o.problema)}</p>` : ""}
+          ${o.publico ? `<p><strong>Quem:</strong> ${escapeHtml(o.publico)}</p>` : ""}
+          ${o.solucao ? `<p><strong>O que construir:</strong> ${escapeHtml(o.solucao)}</p>` : ""}
+          ${o.por_que_agora ? `<p><strong>Por que agora:</strong> ${escapeHtml(o.por_que_agora)}</p>` : ""}
+          ${o.risco ? `<p><strong>Risco:</strong> ${escapeHtml(o.risco)}</p>` : ""}
+        </div>
+        <div class="opp-foot">
+          <span class="evid">Evidências (${o.evidencias.length}): ${o.evidencias.map((n) => citeLink(run, n)).join(" ")}</span>
+          <button class="ghost" type="button" data-deep="${i}">Aprofundar →</button>
+        </div>
+      </div>`).join("")}</div>
+      <p class="hint" style="margin-top:12px">As notas são estimativas do Claude com base nos trechos coletados, não pesquisa de mercado formal. Use Aprofundar pra validar antes de decidir.</p>`;
+  }
+
+  $("report").addEventListener("click", (e) => {
+    const b = e.target.closest("[data-deep]"); if (!b || state.run?.kind !== "discover") return;
+    const o = state.run.opps[Number(b.dataset.deep)]; if (!o) return;
+    showTab("topic");
+    $("q").value = clip(o.busca, 200); $("mode").value = "validar"; $("region").value = state.run.region;
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    $("formTopic").requestSubmit();
+  });
+
+  function renderReport(run) {
+    const refs = run.refs || [];
+    const md = (run.report || "").replace(/\[(\d{1,3})\](?!\()/g, (m, n) => {
+      const r = refs[Number(n) - 1]; return r ? `[[${n}]](${r.url} "cite")` : m;
+    });
+    const el = $("report");
+    el.innerHTML = window.marked && window.DOMPurify
+      ? DOMPurify.sanitize(marked.parse(md, { gfm: true }))
+      : "<pre style='white-space:pre-wrap'>" + escapeHtml(run.report || "") + "</pre>";
+    el.querySelectorAll("a").forEach((a) => {
+      a.target = "_blank"; a.rel = "noopener";
+      if (a.title === "cite") { a.classList.add("cite"); const r = refs.find((x) => x.url === a.getAttribute("href")); a.title = r ? clip(r.title, 120) : ""; }
+    });
+    el.querySelectorAll("table").forEach((t) => {
+      if (t.parentElement.classList.contains("tbl")) return;
+      const w = document.createElement("div"); w.className = "tbl"; t.replaceWith(w); w.appendChild(t);
+    });
+  }
+
+  $("stop").addEventListener("click", () => state.ctl?.abort());
+  $("regen").addEventListener("click", () => {
+    const run = state.run; if (!run?.refs?.length) return;
+    state.view = "main"; renderRail(); $("items").hidden = true; $("report").hidden = false; $("report").innerHTML = "";
+    run.kind === "discover" ? discover(run) : analyzeTopic(run);
+  });
+  $("copy").addEventListener("click", async () => {
+    const run = state.run; if (!run) return;
+    const refs = (run.refs || []).map((r) => `[${r.n}] ${r.title} — ${r.url}`).join("\n");
+    const body = run.kind === "discover"
+      ? run.opps.map((o, i) => `${i + 1}. ${o.titulo} (${o.total}/20)\nDor: ${o.problema}\nQuem: ${o.publico}\nO que construir: ${o.solucao}\nPor que agora: ${o.por_que_agora}\nRisco: ${o.risco}\nEvidências: ${o.evidencias.map((n) => "[" + n + "]").join(" ")}`).join("\n\n")
+      : run.report;
+    try { await navigator.clipboard.writeText(`${body}\n\nFontes:\n${refs}`); $("copy").textContent = "Copiado"; }
+    catch { $("copy").textContent = "Não foi possível copiar"; }
+    setTimeout(() => ($("copy").textContent = "Copiar"), 2000);
+  });
+
+  // ---------- history ----------
+  function saveHistory(run) {
+    const key = (x) => x.kind === "discover" ? `d|${x.area}|${x.model}|${x.region}` : `t|${x.topic}|${x.mode}`;
+    const h = store.get("pesq.hist", []).filter((x) => key(x) !== key(run));
+    h.unshift(run);
+    store.set("pesq.hist", h.slice(0, 8));
+    renderHistory();
+  }
+  function renderHistory() {
+    const h = store.get("pesq.hist", []).filter((x) => x.kind);
+    $("historyBox").hidden = !h.length;
+    $("history").innerHTML = h.map((x, i) => {
+      const name = x.kind === "discover" ? `Oportunidades${x.area ? ": " + x.area : " (todas as áreas)"}` : x.topic;
+      const sub = x.kind === "discover" ? `${x.opps.length} oportunidades · ${MODEL_LABEL[x.model]}` : MODE_LABEL[x.mode];
+      return `<button type="button" data-i="${i}"><strong>${escapeHtml(name)}</strong><span>${escapeHtml(sub)} · ${new Date(x.at).toLocaleDateString("pt-BR")}</span></button>`;
+    }).join("");
+  }
+  $("history").addEventListener("click", (e) => {
+    const b = e.target.closest("[data-i]"); if (!b) return;
+    const x = store.get("pesq.hist", []).filter((y) => y.kind)[Number(b.dataset.i)]; if (!x) return;
+    state.ctl?.abort();
+    state.run = x; state.view = "main";
+    $("how").hidden = true; $("run").hidden = false; hideThinking();
+    $("items").hidden = true; $("report").hidden = false;
+    $("sheetTitle").textContent = x.kind === "discover" ? "Oportunidades" : "Relatório";
+    $("regen").hidden = false; $("copy").hidden = false; $("stop").hidden = true;
+    renderRail(); renderMain(x);
+    $("run").scrollIntoView({ behavior: "smooth", block: "start" });
+  });
+
+  try { $("engine").value = store.get("pesq.engine", "remote"); } catch {}
+  $("engine").addEventListener("change", () => store.set("pesq.engine", engine()));
+  renderHistory();
+  boot();
+})();
+</script>
