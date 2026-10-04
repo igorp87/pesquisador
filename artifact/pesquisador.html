@@ -401,7 +401,7 @@ a.cite { font: 500 0.78em var(--mono); text-decoration: none; padding: 0 2px; }
     setPill("claude", sample ? "ok" : "bad", sample ? "Claude: pronto (pede permissão no 1º uso)" : "Claude: indisponível nesta visualização");
     if (!mcp) {
       setPill("search", "bad", "Busca na web: indisponível");
-      notice("Esta visualização não consegue usar conectores. Abra o artefato pelo claude.ai, logado na sua conta.", true);
+      await diagnose();
       return;
     }
     try {
@@ -415,6 +415,25 @@ a.cite { font: 500 0.78em var(--mono); text-decoration: none; padding: 0 2px; }
         notice("Reconecte o Parallel Search em claude.ai → Configurações → Conectores.", true);
       } else setPill("search", "ok", "Busca na web: Parallel Search");
     } catch { setPill("search", "warn", "Busca na web: status desconhecido"); }
+  }
+
+  // Explains why connectors are missing: a non-viewer surface, or a permission switched off.
+  async function diagnose() {
+    const perms = await (window.claude && window.claude.use ? window.claude.use("permissions") : Promise.resolve(null));
+    if (!perms) {
+      notice(`Esta janela não é o visualizador do claude.ai, então conectores, banco e Claude não funcionam aqui. Abra <strong>https://claude.ai/artifact/KBaoGJLvAMigs3ma99NvB9</strong> numa aba do navegador, logado na sua conta.`, true);
+      return;
+    }
+    const map = await perms.state().catch(() => ({}));
+    const label = { mcp: "Conectores", "mcp:Parallel Search": "Parallel Search", sample: "Claude da conta", db: "Banco do artefato", comments: "Comentários" };
+    const word = { granted: "liberado", prompt: "vai perguntar", denied: "bloqueado", unavailable: "indisponível" };
+    const rows = Object.keys(label).map((k) => `${label[k]}: <strong>${word[map[k] || "unavailable"]}</strong>`).join(" · ");
+    const denied = Object.keys(label).some((k) => map[k] === "denied");
+    notice(`Os conectores não carregaram nesta visualização.<br>${rows}<br>${denied ? "Algo foi bloqueado: libere no painel de permissões e recarregue." : "Se acabou de aparecer um pedido de permissão do claude.ai, aceite e recarregue a página. Se abriu pelo app, tente numa aba do navegador."} <button class="ghost" id="openPerms" type="button" style="margin-top:6px">Abrir permissões</button>`, true);
+    $("openPerms").onclick = async () => {
+      try { await perms.manage(); location.reload(); }
+      catch { $("openPerms").textContent = "Use o menu Permissões do artefato"; }
+    };
   }
 
   // ---------- connector input ----------
